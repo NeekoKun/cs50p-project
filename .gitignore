@@ -2,8 +2,9 @@
 __pycache__/
 .pytest_cache/
 
-# Ignore credentials
+# Ignore personal files
 *.csv
+*.7z
 
 # Ignore IDE-specific files
 .vscode/
