@@ -177,7 +177,7 @@ class Peer:
         s.close()
 
     def add_credentials(self, creds: tuple) -> None:
-        with open("credentials.csv", "w") as csvfile:
+        with open("credentials.csv", "a", newline='') as csvfile:
             writer = csv.writer(csvfile)
             self.logger.debug(f"Writing {creds} to 'credentials.csv'")
             writer.writerow(creds)
@@ -206,9 +206,7 @@ class Peer:
                 self.logger.info(f"{addr[0]} tried to login with wrong password: {pwd}")
                 connection.send("no".encode("utf"))
     
-    def check_signup_credentials(self, connection: socket.socket, addr: tuple) -> bool:
-        username = connection.recv(1024).decode("utf-8")
-        
+    def check_signup_credentials(self, connection: socket.socket, addr: tuple, username: str) -> bool:
         with open("credentials.csv", "r") as csvfile:
             credentials = csv.reader(csvfile)
             
@@ -218,15 +216,14 @@ class Peer:
                     connection.send("no".encode("utf-8"))
                     return False
         
-        self.logger.debug(f"Username available, sending confirmation")
+        self.logger.debug(f"Username {username} available, sending confirmation")
         connection.send("yes".encode("utf-8"))
         
         password = connection.recv(1024).decode("utf-8")
         
         self.logger.debug("Password received, appending credentials to csv file")
         self.add_credentials((username, password))
-        
-        connection.send("yes".encode("utf-8"))
+
         return True
 
     def settings(self) -> str:
@@ -243,13 +240,16 @@ class Peer:
             self.logger.debug("Neither encryption nor signature settings are selected")
             return "None|None"
     
-    def str_devices(self) -> None:
+    def str_devices(self) -> str:
         message = []
         
         for i in self.devices:
-            message.append("|".join(i.vars()))
+            b = []
+            for j in i.values():
+                b.append(str(j))
+            message.append("|".join(b))
         
-        return " -|- ".join(message).encode("utf-8")
+        return " -|- ".join(message)
     
     def handle_login(self, connection: socket.socket, address: tuple) -> None:
         connection.send("ok".encode("utf-8"))
@@ -285,10 +285,11 @@ class Peer:
             connection.send("yes".encode("utf-8"))
 
     def handle_signup(self, connection: socket.socket, address: tuple) -> None:
-        connection.send("ok".encode("utf-8"))
+        connection.send("yes".encode("utf-8"))
         
+        username = connection.recv(1024).decode("utf-8")
         self.logger.debug("Checking for signup credentials...")
-        if not self.check_signup_credentials(connection, address):
+        if not self.check_signup_credentials(connection, address, username):
             self.logger.info("Failed to pass signup check, aborting connection")
             return
         
@@ -304,6 +305,8 @@ class Peer:
             
         if connection.recv(1024).decode("utf-8") == "Devices?":
             self.logger.debug("Sending devices")
+            strdevs = self.str_devices()
+            print(strdevs)
             connection.send(self.str_devices().encode("utf-8"))
             
         if self.encryption:

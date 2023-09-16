@@ -1,7 +1,5 @@
-import csv
+import hashlib
 
-with open("credentials.csv") as creds:
-    reader = csv.reader(creds)
-    for i in reader:
-        username, password = i
-        print(username)
+password = "palle"
+
+print(type(hashlib.sha256(password.encode('utf8')).hexdigest()))
