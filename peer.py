@@ -5,28 +5,36 @@ import hashlib
 import logging
 import socket
 import base64
+import time
 import csv
-
 
 class Peer:
     def __init__(self, encryption="None", signature="None"):
         self.id = 0
-        self.devices = []               # List of every device in the network, complete of IP, port, key and signature
+        self.devices = []               # List of every device in the network. Format: (username: str, ip: str, port: str, encryption: str, signature: str)
         self.neighbors = []             # List of actually connected devices to self
         self.connection_threads = []    # List of connection threads
-        self.to_send = []               # Queue of message to be sent. Format: (ip, message)
+        self.listening_threads = []     # List of activly listening threads
+        self.to_send = []               # Queue of message to be sent. Format: (message: str, id: int)
+        self.to_read = []               # Queue of message to be read. Format: (message: str, id: int)
         self.queue = []
         self.running = True
         self.granting = False
         self.encryption = False
         self.signature = False
+        
         self.stop_event = threading.Event()
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
         
-        self.logger.info("Setting encryption method")
         self.set_encryption(encryption)
         self.set_signature(signature)
+
+    def read(self):
+        result = self.to_read[0]
+        self.to_read.pop(0)
+
+        return f"Message from {self.devices[result[1]]['ip']}:\n{result[0]}\n--------------------------------"
 
     def create_network(self, username: str, password: str, ip: str, signature: str, encryption: str) -> None:
         self.username = username
@@ -45,7 +53,7 @@ class Peer:
         self.logger.debug("Setting encryption method")
         self.set_encryption(encryption)
         
-        self.devices.append({"ip": ip, "port": 44440})
+        self.devices.append({"ip": ip, "port": 44441})
         
         self.grant()
 
@@ -99,22 +107,23 @@ class Peer:
                 del self.signer
                 self.signature = False
 
-    def get_device_by_arg(self, arg: str, target) -> dict:
-        for device in self.devices:
+    def get_id_by_arg(self, arg: str, target) -> dict:
+        for i, device in enumerate(self.devices):
             if device[arg] == target:
-                return device
+                return i
 
         return None
 
-    def processed_message(self, message: bytes, id: int) -> bytes:
+    def processed_message(self, message: str, id: int, incoming: bool) -> bytes or str:
         if self.encryption:
             self.logger.debug("Setting up cipher for encryption/decryption of message")
             processed_key = base64.urlsafe_b64encode(hashlib.sha256(self.devices[id]["key"].encode("utf-8")).digest())
             cipher = Fernet(processed_key)
             del processed_key
         
-        if id != self.id:
+        if incoming:
             self.logger.debug("Processing incoming message...")
+            
             if self.encryption:
                 self.logger.debug("Decrypting message...")
                 message = cipher.decrypt(message)
@@ -152,29 +161,13 @@ class Peer:
                 message = cipher.encrypt(message)
                 self.logger.debug("Message encrypted succefully")
             
-        if type(message) == str:
-            message.encode("utf-8")
-            
+        if type(message) == str and not incoming:
+            message = message.encode("utf-8")
+        
+        if type(message) == bytes and incoming:
+            message = message.decode("utf-8")
+        
         return message
-
-    def send_message_single(self, ip: str, port: int, msg: str) -> None:
-        self.logger.debug(f"Opening connection to send single message")
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        message = self.processed_message(msg, self.id)
-
-        self.logger.debug(f"Connecting to {ip}:{port}")
-        s.connect((ip, port))
-        self.logger.debug("Sending message")
-        s.send(message)
-
-        if s.recv(1024) == "yes":
-            self.logger.debug("Message sent succesfully")
-        else:
-            self.logger.waring(f"Problem sending message to {ip}:{port}")
-
-        self.logger.debug(f"Closing connection with {ip}:{port}")
-        s.close()
 
     def add_credentials(self, creds: tuple) -> None:
         with open("credentials.csv", "a", newline='') as csvfile:
@@ -205,7 +198,7 @@ class Peer:
             else:
                 self.logger.info(f"{addr[0]} tried to login with wrong password: {pwd}")
                 connection.send("no".encode("utf"))
-    
+
     def check_signup_credentials(self, connection: socket.socket, addr: tuple, username: str) -> bool:
         with open("credentials.csv", "r") as csvfile:
             credentials = csv.reader(csvfile)
@@ -239,7 +232,7 @@ class Peer:
         else:
             self.logger.debug("Neither encryption nor signature settings are selected")
             return "None|None"
-    
+
     def str_devices(self) -> str:
         message = []
         
@@ -250,7 +243,7 @@ class Peer:
             message.append("|".join(b))
         
         return " -|- ".join(message)
-    
+
     def handle_login(self, connection: socket.socket, address: tuple) -> None:
         connection.send("ok".encode("utf-8"))
         
@@ -295,7 +288,7 @@ class Peer:
         
         new_device = {}
         new_device["ip"] = address[0]
-        new_device["port"] = address[1]
+        new_device["port"] = 44441+len(self.devices)
         
         if connection.recv(1024).decode("utf-8") == "Settings?":
             self.logger.debug("Sending settings")
@@ -306,7 +299,6 @@ class Peer:
         if connection.recv(1024).decode("utf-8") == "Devices?":
             self.logger.debug("Sending devices")
             strdevs = self.str_devices()
-            print(strdevs)
             connection.send(self.str_devices().encode("utf-8"))
             
         if self.encryption:
@@ -324,6 +316,7 @@ class Peer:
             self.logger.debug("Generating thread to listen for join requests")
             self.granting = True
             self.granter_thread = threading.Thread(target=self.listen_as_granter)
+            self.granter_thread.daemon = True
             self.granter_thread.start()
         
         if not granter and self.granting:
@@ -353,7 +346,10 @@ class Peer:
             case _:
                 conn.close()
                 self.logger.info("Connection aborted as neither login nor signup request were received")
-             
+        
+        self.logger.debug("Connecting to every close peer...")
+        self.connect_all()
+
     def get_devices(self, string: str) -> list:
         devices = string.split(" -|- ")
         
@@ -453,7 +449,7 @@ class Peer:
         
         s.recv(1024)
         s.close()
-    
+
     def signup(self, username: str, password: str, granter: str) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         password = hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -510,19 +506,87 @@ class Peer:
                 s.send(self.public_sign.encode("utf-8"))
         
         s.recv(1024)
+        self.logger.debug("Connecting to all...")
+        self.connect_all()
         s.close()
 
     def close(self) -> None:
         self.stop_event.set()
-        print("Exiting...")
+        self.logger.info("Exiting...")
         return
+
+    def receive(self, message, id) -> None:
+        self.logger.debug("Appending message to to_read queue")
+        self.to_read.append((message, id))
+
+    def send(self, message, id) -> None:
+        if not id < len(self.devices):
+            self.logger.error("Error: ID not connected to the network")
+            return
+        
+        if not (0 < abs(id-self.id) < 3):
+            # TODO: implement A* as propagation algorithm
+            self.logger.error("Error: message propagation in the network has not been implemented yet.")
+            raise NotImplementedError("A* Propagation algorithm not implemented yet.")
+        
+        if id == -1:
+            self.logger.info(f"Appending new message to queue for everyone (broadcast): {message}")
+        else:
+            self.logger.info(f"Appending new message to queue for {self.devices[id]['ip']}: {message}")
+            
+        self.to_send.append((message, id))
+        return
+
+    def connect_all(self) -> None:
+        for i, device in enumerate(self.devices):
+            if 0 < abs(i-self.id) < 3:
+                if device not in self.neighbors:
+                    self.neighbors.append(device)
+                
+                                
+                self.connection_threads.append(threading.Thread(target=self.connect, args=(device,)))
+                self.listening_threads.append(threading.Thread(target=self.listen))
+        
+        for i in self.listening_threads:
+            i.daemon = True
+            i.start()
+        
+        time.sleep(1)
+        
+        for i in self.connection_threads:
+            i.daemon = True
+            i.start()
+
+    def listen(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        s.bind(("0.0.0.0", self.devices[self.id]["port"]))
+        self.logger.debug("Listening for connections...")
+        s.listen()
+
+        while True:
+            conn, addr = s.accept()
+            self.logger.debug(f"Connection accepted from {addr[0]}")
+            while True:
+                message = conn.recv(1024)
+                message = self.processed_message(message, self.get_id_by_arg("ip", addr[0]), True)
+            
+                self.receive(message, self.get_id_by_arg("ip", addr[0]))
+                conn.send("yes".encode("utf-8"))
 
     def connect(self, device):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((device["ip"], device["port"]))
 
         while not self.stop_event.is_set():
-            if len(self.to_send) > 0 and (self.to_send[0]["ip"] == device["ip"] or self.to_send[0]["ip"].split(".")[-1] == "255"):
-                s.send(self.processed_message(self.to_send[1], device["key"]))
+            for msg in self.to_send:
+                if msg[1] == self.devices.index(device) or msg[1] == -1:
+                    s.send(self.processed_message(msg[0], self.devices.index(device), False))
+                    
+                    if s.recv(1024).decode('utf-8') == "yes":
+                        self.logger.debug("Message sent successfully")
+                    else:
+                        self.logger.error(f"Error sending message to {device['ip']}")
+                    self.to_send.remove(msg)
 
         s.close()
