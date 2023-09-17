@@ -14,6 +14,8 @@ def login(peer: Peer) -> None:
 
 
 def signup(peer: Peer) -> None:
+    peer.signup("NeekoLinux", "Pollo", "192.168.1.10")
+    return
     username = input("Enter username: ")
     password = input("Enter password: ")
     granter = input("Enter granter IPv4 address: ")
@@ -22,6 +24,8 @@ def signup(peer: Peer) -> None:
 
 
 def create_network(peer: Peer) -> None:
+    peer.create_network("NeekoKunAdmin", "Palle", "192.168.1.10", "None", "None")
+    return
     username = input("Enter username: ")
     password = input("Enter password: ")
     
@@ -44,7 +48,7 @@ def main():
     messages = []
     peer = Peer()
     
-    print("1-Login\n2-Sign up\n3-Create network\n0-close\n")
+    print("1-Log In\n2-Sign Up\n3-Create Network\n0-Close\n")
     match input(""):
         case "1":
             login(peer)

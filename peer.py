@@ -34,7 +34,7 @@ class Peer:
         result = self.to_read[0]
         self.to_read.pop(0)
 
-        return f"Message from {self.devices[result[1]]['ip']}:\n{result[0]}\n--------------------------------"
+        return f"Message from {self.devices[result[1]]['username']}:\n{result[0]}\n--------------------------------"
 
     def create_network(self, username: str, password: str, ip: str, signature: str, encryption: str) -> None:
         self.username = username
@@ -53,7 +53,7 @@ class Peer:
         self.logger.debug("Setting encryption method")
         self.set_encryption(encryption)
         
-        self.devices.append({"ip": ip, "port": 44441})
+        self.devices.append({"username": self.username, "ip": ip, "port": 44441})
         
         self.grant()
 
@@ -175,9 +175,8 @@ class Peer:
             self.logger.debug(f"Writing {creds} to 'credentials.csv'")
             writer.writerow(creds)
 
-    def check_login_credentials(self, connection: socket.socket, addr: tuple) -> bool:
+    def check_login_credentials(self, receiving: str, connection: socket.socket, addr: tuple) -> bool:
         self.logger.debug("Receiving and decoding username")
-        receiving = connection.recv(1024).decode("utf-8")
         
         with open("credentials.csv", "r") as csvfile:
             credentials = csv.reader(csvfile)
@@ -246,15 +245,17 @@ class Peer:
 
     def handle_login(self, connection: socket.socket, address: tuple) -> None:
         connection.send("ok".encode("utf-8"))
+        username = connection.recv(1024).decode("utf-8")
         
         self.logger.debug("Checking for login credentials...")
-        if not self.check_login_credentials(connection, address):
+        if not self.check_login_credentials(username, connection, address):
             self.logger.info("Failed to pass login check, aborting connection")
             return
         
         new_device = {}
         new_device["ip"] = address[0]
-        new_device["port"] = address[1]           
+        new_device["port"] = address[1]
+        new_device["username"] = username
 
         
         if connection.recv(1024).decode("utf-8") == "Settings?":
@@ -287,6 +288,7 @@ class Peer:
             return
         
         new_device = {}
+        new_device["username"] = username
         new_device["ip"] = address[0]
         new_device["port"] = 44441+len(self.devices)
         
@@ -357,17 +359,18 @@ class Peer:
         
         for i in devices:
             new_device = {}
-            new_device["ip"] = i.split("|")[0]
-            new_device["port"] = int(i.split("|")[1])
+            new_device["username"] = i.split("|")[0]
+            new_device["ip"] = i.split("|")[1]
+            new_device["port"] = int(i.split("|")[2])
             
             if self.encryption:
-                new_device["key"] = i.split("|")[2]
+                new_device["key"] = i.split("|")[3]
                 
                 if self.signature:
-                    new_device["sign"] = i.split("|")[3]
+                    new_device["sign"] = i.split("|")[4]
             else:
                 if self.signature:
-                    new_device["sign"] = i.split("|")[2]
+                    new_device["sign"] = i.split("|")[3]
             
             result.append(new_device)
         
