@@ -12,6 +12,7 @@ incoming = []
 unread = 0
 arrest_sequence = ":q!"
 
+
 def login(peer: Peer) -> None:
     username = input("Enter username: ")
     password = input("Enter password: ")
@@ -28,7 +29,8 @@ def move(x: int, y: int) -> None:
 
 def addstr(string: str) -> None:
     """Write string"""
-    ctypes.windll.kernel32.WriteConsoleW(gHandle, c_wchar_p(string), c_ulong(len(string)), c_void_p(), None)
+    ctypes.windll.kernel32.WriteConsoleW(gHandle, c_wchar_p(
+        string), c_ulong(len(string)), c_void_p(), None)
 
 
 def signup(peer: Peer) -> None:
@@ -71,6 +73,7 @@ def display_messages() -> None:
     for message in incoming:
         print(message)
 
+
 def log_messages(peer) -> None:
     while True:
         if len(peer.to_read) > 0:
@@ -92,7 +95,8 @@ def settings(peer: Peer) -> None:
         case "arrest sequence":
             arrest_sequence = input("Input new arrest sequence: ")
         case "username":
-            logging.debug("Username config not implemented, feature supported as PoC.")
+            logging.debug(
+                "Username config not implemented, feature supported as PoC.")
             input("Input new username: ")
 
 
@@ -125,13 +129,16 @@ def main():
     while True:
         match input(f"Connected to network.\n\n\nChose and option:\n\n1 - Send Private Message\n2 - Send Broadcast Message\n3 - Read received messages\n0 - Settings\n\n"):
             case "1":
-                raise NotImplementedError("Private messages have not yet been implemented")
+                raise NotImplementedError(
+                    "Private messages have not yet been implemented")
             case "2":
-                print("Arrest sequence: "+arrest_sequence+"\nYou may change the arrest sequence in the settings menu.")
+                print("Arrest sequence: "+arrest_sequence +
+                      "\nYou may change the arrest sequence in the settings menu.")
                 rows = []
                 while True:
                     inp = input(f">")
-                    if inp == arrest_sequence: break
+                    if inp == arrest_sequence:
+                        break
                     rows.append(inp)
                 message = "\n".join(rows)
                 peer.send(message, -1)
@@ -144,13 +151,61 @@ def main():
             case _:
                 raise NotImplementedError
 
-
         if platform.system() == "Windows":
             os.system("CLS")
         if platform.system() == "Linux":
             os.system("clear")
 
     peer.close()
+
+
+def reverse_string(s):
+    return s[::-1]
+
+
+def square_number(num):
+    return num * num
+
+
+def factorial(num):
+    if num == 0:
+        return 1
+    else:
+        return num * factorial(num - 1)
+
+
+def even_or_odd(num):
+    if num % 2 == 0:
+        return "Even"
+    else:
+        return "Odd"
+
+
+def count_words(sentence):
+    words = sentence.split()
+    return len(words)
+
+
+def find_max(numbers):
+    return max(numbers)
+
+
+def is_palindrome(s):
+    return s == s[::-1]
+
+
+def sum_of_digits(num):
+    return sum(int(digit) for digit in str(num))
+
+
+def list_length(lst):
+    return len(lst)
+
+
+def average(numbers):
+    if len(numbers) == 0:
+        return 0
+    return sum(numbers) / len(numbers)
 
 
 if __name__ == '__main__':
