@@ -320,20 +320,20 @@ class Peer:
             self.granter_thread = threading.Thread(target=self.listen_as_granter)
             self.granter_thread.daemon = True
             self.granter_thread.start()
-        
+
         if not granter and self.granting:
             self.granting = False
             self.granter_thread._stop()
 
     def listen_as_granter(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        
+
         s.bind(("0.0.0.0", 44440))
         s.listen()
-        
+
         self.logger.debug("Waiting for connection as granter...")
         conn, addr = s.accept()
-        
+
         match conn.recv(1024).decode("utf-8"):
             case "login":
                 conn.send("yes".encode("utf-8"))
@@ -348,59 +348,59 @@ class Peer:
             case _:
                 conn.close()
                 self.logger.info("Connection aborted as neither login nor signup request were received")
-        
+
         self.logger.debug("Connecting to every close peer...")
         self.connect_all()
 
     def get_devices(self, string: str) -> list:
         devices = string.split(" -|- ")
-        
+
         result = []
-        
+
         for i in devices:
             new_device = {}
             new_device["username"] = i.split("|")[0]
             new_device["ip"] = i.split("|")[1]
             new_device["port"] = int(i.split("|")[2])
-            
+
             if self.encryption:
                 new_device["key"] = i.split("|")[3]
-                
+
                 if self.signature:
                     new_device["sign"] = i.split("|")[4]
             else:
                 if self.signature:
                     new_device["sign"] = i.split("|")[3]
-            
+
             result.append(new_device)
-        
+
         return result
 
     def verify_credentials(self, username: str, password: str, s: socket.socket) -> bool:
-        s.send(username.encode("utf-8"))        
-        
+        s.send(username.encode("utf-8"))
+
         match s.recv(1024).decode("utf-8"):
             case "yes":
                 pass
-                
+
             case "no":
                 return False
-                
+
             case _:
                 raise NotImplementedError
-        
+
         s.send(password.encode("utf-8"))
-        
+
         match s.recv(1024).decode("utf-8"):
             case "yes":
                 pass
-                
+
             case "no":
                 return False
-                
+
             case _:
                 raise NotImplementedError
-            
+
         return True
 
     def login(self, username: str, password: str, granter: str) -> None:
