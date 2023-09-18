@@ -34,8 +34,6 @@ def addstr(string: str) -> None:
 
 
 def signup(peer: Peer) -> None:
-    peer.signup("NeekoLinux", "Pollo", "192.168.1.10")
-    return
     username = input("Enter username: ")
     password = input("Enter password: ")
     granter = input("Enter granter IPv4 address: ")
@@ -44,9 +42,6 @@ def signup(peer: Peer) -> None:
 
 
 def create_network(peer: Peer) -> None:
-    peer.create_network("NeekoKunAdmin", "Palle",
-                        "192.168.1.10", "None", "None")
-    return
     username = input("Enter username: ")
     password = input("Enter password: ")
 
